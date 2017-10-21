@@ -35,6 +35,7 @@ class ViewController: MultipleTabsViewController {
     register(type: Cell1.self, identifier: "Cell1")
     register(type: Cell2.self, identifier: "Cell2")
     dataSource = self
+    delegate = self
   }
 }
 
@@ -64,6 +65,26 @@ extension ViewController: MultipleTabsViewControllerDataSource {
     
     return cell
   }
+}
+
+extension ViewController: MultipleTabsViewControllerDelegate {
+
+  func multipleTabsViewController(_ multipleTabsViewController: MultipleTabsViewController, cellWillAppearAtIndex index: Int) {
+    print("will appear: \(index)")
+  }
+
+  func multipleTabsViewController(_ multipleTabsViewController: MultipleTabsViewController, cellDidAppearAtIndex index: Int) {
+    print("did appear: \(index)")
+  }
+
+  func multipleTabsViewController(_ multipleTabsViewController: MultipleTabsViewController, cellWillDisappearAtIndex index: Int) {
+    print("will disappear: \(index)")
+  }
+
+  func multipleTabsViewController(_ multipleTabsViewController: MultipleTabsViewController, cellDidDisappearAtIndex index: Int) {
+    print("did disappear: \(index)")
+  }
+
 }
 
 final class Cell1: UICollectionViewCell {

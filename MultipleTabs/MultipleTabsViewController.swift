@@ -59,6 +59,8 @@ open class MultipleTabsViewController: UIViewController {
       setup()
     }
   }
+
+  public var delegate: MultipleTabsViewControllerDelegate?
   
   public func register<T>(type: T.Type, identifier: String) where T: UICollectionViewCell {
     collectionView.register(type, forCellWithReuseIdentifier: identifier)
@@ -77,7 +79,83 @@ open class MultipleTabsViewController: UIViewController {
   public func reloadData() {
     collectionView.reloadData()
   }
-  
+
+  private var displayedTabIndexes = IndexSet()
+  private var appearingTabIndexes = IndexSet()
+  private var disappearingTabIndexes = IndexSet()
+
+  public var selectedTabIndex: Int {
+    get {
+      return displayedTabIndexes.first ?? 0
+    }
+    set {
+      setSelectedTabIndex(newValue, animated: false)
+    }
+  }
+
+  public func setSelectedTabIndex(_ index: Int, animated: Bool) {
+    collectionView.scrollToItem(at: IndexPath(item: index, section: 0), at: .centeredHorizontally, animated: false)
+  }
+
+  fileprivate func updateVisibleTabs(fullTabIndexes: IndexSet, partialTabIndexes: IndexSet) {
+    let visibleTabIndexes = fullTabIndexes ∪ partialTabIndexes
+
+    let disappearingDisplayedTabIndexes = displayedTabIndexes ∖ (displayedTabIndexes ∩ fullTabIndexes)
+    let disappearingAppearingTabIndexes = appearingTabIndexes ∖ (appearingTabIndexes ∩ visibleTabIndexes)
+    let allDisappearingTabIndexes = disappearingDisplayedTabIndexes ∪ disappearingAppearingTabIndexes
+    let newDisappearingTabIndexes = allDisappearingTabIndexes ∖ disappearingTabIndexes
+    newDisappearingTabIndexes.forEach { delegate?.multipleTabsViewController?(self, cellWillDisappearAtIndex: $0) }
+
+    let allAppearingTabIndexes = visibleTabIndexes ∖ disappearingDisplayedTabIndexes
+    let newAppearingTabIndexes = allAppearingTabIndexes ∖ appearingTabIndexes
+    newAppearingTabIndexes.forEach { delegate?.multipleTabsViewController?(self, cellWillAppearAtIndex: $0) }
+
+    let hiddenDisplayedTabIndexes = displayedTabIndexes ∖ (displayedTabIndexes ∩ visibleTabIndexes)
+    let hiddenAppearingTabIndexes = appearingTabIndexes ∖ (appearingTabIndexes ∩ visibleTabIndexes)
+    let allHiddenTabIndexes =
+
+      /*
+      .subtracting(fullTabIndexes)
+      .subtracting(disappearingTabIndexes)
+      .forEach {
+        delegate?.multipleTabsViewController?(self, cellWillDisappearAtIndex: $0)
+        appearingTabIndexes.remove($0)
+        disappearingTabIndexes.insert($0)
+    }
+
+    // All the tabs that will appear for the first time
+    fullTabIndexes
+      .union(partialTabIndexes)
+      .subtracting(displayedTabIndexes)
+      .subtracting(appearingTabIndexes)
+      .forEach {
+        delegate?.multipleTabsViewController?(self, cellWillDisappearAtIndex: $0)
+        appearingTabIndexes.remove($0)
+        disappearingTabIndexes.insert($0)
+    }
+
+    // All the tabs that did disappear
+    displayedTabIndexes
+      .union(appearingTabIndexes)
+      .subtracting(fullTabIndexes)
+      .subtracting(disappearingTabIndexes)
+      .forEach {
+        delegate?.multipleTabsViewController?(self, cellWillDisappearAtIndex: $0)
+        appearingTabIndexes.remove($0)
+        disappearingTabIndexes.insert($0)
+    }
+
+    // All the tabs that did appear
+    fullTabIndexes
+      .subtracting(displayedTabIndexes)
+      .forEach {
+        delegate?.multipleTabsViewController?(self, cellDidAppearAtIndex: $0)
+        appearingTabIndexes.remove($0)
+        disappearingTabIndexes.insert($0)
+    }
+ */
+  }
+
   private lazy var border: UIView = {
     
     let view = UIView()
@@ -293,7 +371,7 @@ extension MultipleTabsViewController: UICollectionViewDataSource, UICollectionVi
   }
   
   public func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, sizeForItemAt indexPath: IndexPath) -> CGSize {
-    return CGSize(width: collectionView.frame.width, height: collectionView.frame.height)
+    return collectionView.bounds.size
   }
   
   public func collectionView(_ collectionView: UICollectionView, willDisplay cell: UICollectionViewCell, forItemAt indexPath: IndexPath) {
@@ -305,11 +383,36 @@ extension MultipleTabsViewController: UICollectionViewDataSource, UICollectionVi
   }
   
   public func scrollViewDidScroll(_ scrollView: UIScrollView) {
+    guard scrollView.bounds.width > 0 else { return }
+    let (i, f) = modf(scrollView.contentOffset.x / scrollView.bounds.width)
+    let fullTabIndexes: IndexSet
+    let partialTabIndexes: IndexSet
+    if f == 0 {
+      fullTabIndexes = IndexSet(integer: Int(i))
+      partialTabIndexes = IndexSet()
+    } else {
+      fullTabIndexes = IndexSet()
+      partialTabIndexes = IndexSet([Int(i), Int(i+1)])
+    }
+    updateVisibleTabs(fullTabIndexes: fullTabIndexes, partialTabIndexes: partialTabIndexes)
 
     let scrollViewFrameWidth = scrollView.frame.width > 0 ? scrollView.frame.width : 1
 
     moved(toIndex: Int((scrollView.contentOffset.x + scrollView.frame.width / 2) / scrollViewFrameWidth))
   }
+
+//  public func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+//    guard scrollView.bounds.width > 0 else { return }
+//    let index = Int(scrollView.contentOffset.x / scrollView.bounds.width)
+//    setAppearedTabIndex(index)
+//  }
+//
+//  public func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
+//    guard scrollView.bounds.width > 0 else { return }
+//    let index = Int(scrollView.contentOffset.x / scrollView.bounds.width)
+//    setAppearedTabIndex(index)
+//  }
+
 }
 
 @objc public protocol MultipleTabsViewControllerDataSource {
@@ -328,4 +431,34 @@ extension MultipleTabsViewController: UICollectionViewDataSource, UICollectionVi
   
   /// Called just after cell has been displayed
   @objc optional func didEndDisplaying(cell: UICollectionViewCell, forTabIndex index: Int)
+
+}
+
+@objc public protocol MultipleTabsViewControllerDelegate {
+
+  @objc optional func multipleTabsViewController(_ multipleTabsViewController: MultipleTabsViewController, cellWillAppearAtIndex index: Int)
+  @objc optional func multipleTabsViewController(_ multipleTabsViewController: MultipleTabsViewController, cellDidAppearAtIndex index: Int)
+  @objc optional func multipleTabsViewController(_ multipleTabsViewController: MultipleTabsViewController, cellWillDisappearAtIndex index: Int)
+  @objc optional func multipleTabsViewController(_ multipleTabsViewController: MultipleTabsViewController, cellDidDisappearAtIndex index: Int)
+
+}
+
+infix operator ∩
+infix operator ∪
+infix operator ∖
+
+private extension SetAlgebra {
+
+  static func ∩(lhs: Self, rhs: Self) -> Self {
+    return lhs.intersection(rhs)
+  }
+
+  static func ∪(lhs: Self, rhs: Self) -> Self {
+    return lhs.union(rhs)
+  }
+
+  static func ∖(lhs: Self, rhs: Self) -> Self {
+    return lhs.subtracting(rhs)
+  }
+
 }
